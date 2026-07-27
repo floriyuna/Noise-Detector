@@ -1,5 +1,6 @@
 # KeyNoise Guard (キーボード打鍵騒音 リアルタイム検知システム)
-https://noise-detector-beiugre0u-floriyunas-projects.vercel.app/
+
+[利用にはこちらをクリック](https://noise-detector-ruby.vercel.app/)
 
 
 KeyNoise Guardは、キーボードの打鍵音（特にタイピング時の「強打」や騒音）をマイク入力からリアルタイムに検知・可視化し、快適なタイピング環境と周囲への配慮をサポートするWebアプリケーションです。
