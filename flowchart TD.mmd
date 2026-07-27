@@ -1,0 +1,19 @@
+flowchart TD
+    subgraph 音響処理
+        Microphone([物理マイク]) -->|生の音声信号| Comp1[① 音響入力・フィルタ部]
+        Comp1 -->|フィルタ済みの音声信号| Comp2[② 打鍵検知・判定部]
+        Comp1 -->|キャリブレーション用信号| Comp3[③ 自動キャリブレーション部]
+    end
+
+    subgraph 制御とUI
+        Comp3 -->|推奨のしきい値| Comp4[④ 警告・インターフェース部]
+        Comp4 -->|適用されたしきい値| Comp2
+        
+        Comp2 -->|リアルタイム音量強度| Comp4
+        Comp2 -->|打鍵検知イベント| Comp4
+    end
+
+    subgraph フィードバック
+        Comp4 -->|画面フラッシュ・振動| Screen([ブラウザ画面])
+        Comp4 -->|警告ビープ音| Speaker([スピーカー/イヤホン])
+    end

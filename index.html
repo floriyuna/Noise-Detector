@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KeyNoise Guard - キーボード騒音検知ツール</title>
+  <meta name="description" content="マイク入力からリアルタイムにキーボードのタイピング音・エンター強打音を検知し、警告する超軽量ウェブツール">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- フラッシュオーバーレイ -->
+  <div id="alertOverlay" class="alert-overlay"></div>
+
+  <div id="appContainer" class="app-wrapper shake-element">
+
+    <!-- ── App Header ── -->
+    <header class="app-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-1); padding: var(--sp-1) 0 var(--sp-2);">
+      <div style="text-align: left;">
+        <h1>KeyNoise <span class="app-name-sub">Guard</span></h1>
+        <p>キーボード打鍵騒音 リアルタイム検知システム</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="themeToggleBtn" class="btn btn-sm">🌓 テーマ切替</button>
+        <button id="pipBtn" class="btn btn-sm">📺 PiP表示</button>
+      </div>
+    </header>
+
+    <!-- ══ HERO CARD: Status / Count / Gauge (最優先) ══ -->
+    <div class="card">
+
+      <!-- Status + Count + Gauge -->
+      <div class="hero-section">
+
+        <!-- Left: Status text + detection count -->
+        <div class="status-block">
+          <div>
+            <div class="status-label">システム状態</div>
+            <div class="status-indicator" style="margin-top:4px;">
+              <div id="statusDot" class="status-dot"></div>
+              <span id="statusText" style="color: var(--txt-secondary);">停止中</span>
+            </div>
+          </div>
+
+          <!-- Detection count — big number -->
+          <div class="detection-hero" style="margin-top:16px;">
+            <span id="detectionCount" class="count-number">0</span>
+            <span class="count-unit">回 強打検知</span>
+          </div>
+
+          <!-- Signal ratio -->
+          <div class="signal-readout" style="margin-top:auto; padding-top:16px;">
+            <span class="signal-label">シグナル比率</span>
+            <span id="signalStrength" style="color: var(--txt-secondary);">0.00</span>
+          </div>
+        </div>
+
+        <!-- Right: Volume gauge bar -->
+        <div class="gauge-block">
+          <div class="gauge-label">音量</div>
+          <div class="gauge-bar-wrapper" id="gaugeWrapper">
+            <div id="gaugeBarFill" class="gauge-bar-fill" style="height: 0%;"></div>
+            <div id="gaugeThresholdLine" class="gauge-threshold-line" style="bottom: 40%;"></div>
+          </div>
+          <div id="gaugeVal" class="gauge-val">0.0</div>
+        </div>
+      </div>
+
+      <!-- Waveform visualizer -->
+      <div class="canvas-section">
+        <div class="canvas-container">
+          <canvas id="visualizerCanvas"></canvas>
+        </div>
+        <!-- Key-trigger indicator -->
+        <div id="keyTriggerIndicator" class="key-trigger-indicator">
+          <span class="key-trigger-dot"></span>
+          <span id="keyTriggerStatus">キー待機中…</span>
+        </div>
+      </div>
+
+      <!-- Start / Stop buttons -->
+      <div class="action-row">
+        <button id="startBtn" class="btn btn-start">▶ 監視を開始</button>
+        <button id="stopBtn"  class="btn btn-stop"  disabled>■ 停止</button>
+      </div>
+    </div>
+
+    <!-- ══ SETTINGS GRID (次点) ══ -->
+    <div class="settings-grid">
+
+      <!-- Left panel: 検知設定 -->
+      <div class="settings-panel">
+        <div class="panel-title">🎚 検知設定</div>
+
+        <!-- しきい値 -->
+        <div class="ctrl-group">
+          <label class="ctrl-label" for="thresholdRange">
+            検知しきい値
+            <span class="ctrl-val" id="thresholdVal">2.00</span>
+          </label>
+          <input type="range" id="thresholdRange" min="1.1" max="5.0" step="0.05" value="2.0">
+          <span class="ctrl-hint">左 = 敏感 / 右 = 鈍感</span>
+        </div>
+
+        <!-- マイク入力ゲイン -->
+        <div class="ctrl-group">
+          <label class="ctrl-label" for="inputGainRange">
+            マイク入力ゲイン
+            <span class="ctrl-val" id="inputGainVal">2.0x</span>
+          </label>
+          <input type="range" id="inputGainRange" min="0.5" max="8.0" step="0.5" value="2.0">
+          <span class="ctrl-hint">マイクが遠い場合は上げてください</span>
+        </div>
+
+        <!-- ノイズゲート (NEW) -->
+        <div class="ctrl-group">
+          <label class="ctrl-label" for="noiseGateRange">
+            ノイズゲート (急上昇率)
+            <span class="ctrl-val" id="noiseGateVal">0.8</span>
+          </label>
+          <input type="range" id="noiseGateRange" min="0" max="2.0" step="0.1" value="0.8">
+          <span class="ctrl-hint">高いほど急激な音のみ反応。話し声の誤検知を抑制。</span>
+        </div>
+
+        <!-- ノイズ追従モード -->
+        <div class="ctrl-group">
+          <label class="ctrl-label" style="margin-bottom:4px;">ノイズ追従モード</label>
+          <div class="mode-group">
+            <label class="radio-label">
+              <input type="radio" name="calibMode" value="static" checked> 静的 (固定)
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="calibMode" value="dynamic"> 動的 (自動)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right panel: 警告設定 + キャリブレーション -->
+      <div class="settings-panel">
+        <div class="panel-title">🔔 警告・キャリブレーション</div>
+
+        <!-- 警告設定 -->
+        <div class="ctrl-group">
+          <div class="switch-row">
+            <div class="switch-label">
+              <span class="title">画面フラッシュ</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="visualAlertToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="switch-row">
+            <div class="switch-label">
+              <span class="title">警告ビープ音</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="audioAlertToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="switch-row">
+            <div class="switch-label">
+              <span class="title">🔑 キー連動モード</span>
+              <span class="desc">キー入力と同時の音のみ検知。話し声・エアコンの誤検知を抑制。</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="keyTriggerToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- キャリブレーション -->
+        <div class="ctrl-group">
+          <div class="section-title">キャリブレーション</div>
+          <div class="calib-box">
+            <div class="calib-row">
+              <div class="calib-row-info">
+                <span class="calib-title">① 静寂測定</span>
+                <span id="noiseFloorStatus" class="calib-hint">未実施</span>
+              </div>
+              <button id="calibNoiseBtn" class="btn btn-calib" disabled>測定 (3秒)</button>
+            </div>
+            <div class="calib-row">
+              <div class="calib-row-info">
+                <span class="calib-title">② 打鍵音学習</span>
+                <span id="keyPatternStatus" class="calib-hint">未実施 (任意)</span>
+              </div>
+              <button id="calibKeyBtn" class="btn btn-calib" disabled>叩いて学習</button>
+            </div>
+            <div class="calib-status-row">
+              <div id="calibrationIndicator" class="indicator-dot"></div>
+              <span id="calibrationStatusText" style="font-size:0.72rem;">監視開始後にキャリブレーションできます</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /settings-grid -->
+
+    <!-- ══ LOG SECTION (控えめ) ══ -->
+    <div class="card">
+      <div class="log-section">
+        <div class="log-header">
+          <h2>検知履歴ログ</h2>
+          <div class="log-actions">
+            <button id="exportLogBtn" class="btn btn-sm">📥 CSV</button>
+            <button id="clearLogBtn"  class="btn btn-sm">消去</button>
+          </div>
+        </div>
+        <div id="logPanel" class="log-panel">
+          <div id="logPlaceholder" style="color:var(--txt-muted); text-align:center; padding:24px 0; font-size:0.8rem;">
+            ログはまだありません
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /app-wrapper -->
+
+  <script src="app.js"></script>
+</body>
+</html>
