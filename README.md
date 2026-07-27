@@ -40,26 +40,25 @@ KeyNoise Guardは、キーボードの打鍵音（特にタイピング時の「
 本システムにおけるマイク入力から警告判定、および表示同期までのオーディオ処理パイプラインです。GitHub等のMermaid表示対応環境で図として描画されます。
 
 ```mermaid
-flowchart TD
-    Mic([物理マイク]) -->|生の音声信号| HPF["① ハイパスフィルタ 600Hz"]
-    HPF -->|低音/音声の基本周波数をカット| Gain["② 入力ゲイン増幅ノード"]
-    Gain -->|増幅された高周波信号| Analyser["③ アナライザー (FFTサイズ1024)"]
+flowchart LR
+    Mic([マイク]) -->|生の音声信号| HPF["① HPF (600Hz)"]
+    HPF -->|低域カット| Gain["② ゲイン増幅"]
+    Gain -->|増幅信号| Analyser["③ アナライザー"]
     
-    Analyser -->|時間領域: 瞬間RMS/ピーク| Detect{"④ 打鍵検知・判定ロジック"}
+    Analyser -->|瞬間RMS/ピーク| Detect{"④ 判定ロジック"}
     
-    subgraph 誤検知防止フィルター ["トリプルノイズ抑制ゲート"]
-        GateA{"🔑 キー連動ゲート<br>※ONの場合のみ"} -->|keydownイベント後350msのみ通過| GateB
-        GateB{"🎚 急上昇率ゲート<br>Rise-rate"} -->|1フレームでの急激な音量上昇か| GateC
-        GateC{"⏱ 持続信号拒否ゲート<br>Sustained-signal"} -->|しきい値超えが5F未満か| Success["検知判定クリア"]
+    subgraph Gate ["トリプル抑制ゲート"]
+        GateA{"🔑 キー連動"} --> GateB{"🎚 急上昇率"}
+        GateB --> GateC{"⏱ 持続音拒否"}
     end
     
-    Detect -->|シグナル強度比率| GateA
-    Success -->|強打イベント発生| Alert["⑤ 警告・インターフェース部"]
+    Detect --> GateA
+    GateC -->|検知クリア| Alert["⑤ 警告 & UI同調"]
     
-    subgraph 警告 & UI同調
-        Alert -->|赤枠点滅 & 画面振動| UI_Main(["メイン画面"])
-        Alert -->|同期フラッシュ & カウントアップ| UI_PiP(["最前面 PiPウインドウ"])
-        Alert -->|オシレータによる電子音| Beep(["スピーカー出力"])
+    subgraph UI ["フィードバック"]
+        Alert --> UI_Main["メイン画面"]
+        Alert --> UI_PiP["最前面PiP"]
+        Alert --> Beep["ビープ音"]
     end
 ```
 
